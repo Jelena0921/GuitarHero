@@ -1,0 +1,178 @@
+import java.io.*;
+import java.net.*;
+import java.util.*;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Enumeration;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
+
+/**
+ * @author Paul Wynne
+ * 
+ * Client class used to test downloads from the server.  
+ *  
+ */
+public class TestStoreClient{
+    
+    private final static String hostName = "localhost";
+    private final static int portNumber = 8888;
+    
+    public static void main(String[] args){
+        TestStoreClient test = new TestStoreClient();
+        test.GetSongPackage(1);
+    }
+
+    public void UpdateStore(){
+        DownloadZip(0);
+        //Process Temp.Zip here now.
+        File tempZip = new File("Temp.zip");
+        Unzip();
+        tempZip.delete();
+    }
+
+    public void GetSongPackage(int PackageID, String songTitle){
+        DownloadZip(PackageID);
+        //Process Temp.Zip Here now.
+        File tempZip = new File("Temp.zip");
+        String filePath = tempZip.getAbsolutePath();
+        String newFilePath = filePath.substring(0, filePath.length() - 14) + "Songs/" + songTitle;
+        File newDir = new File(newFilePath);
+        if(!newDir.exists()){
+            newDir.mkdir();
+        }
+        Unzip();
+        File artwork = new File("art.png");
+        File notesFile = new File("notes.txt");
+        File musicFile = new File("music.mid");
+        copyFile(artwork, newDir, "art.png");
+        copyFile(notesFile, newDir, "notes.txt");
+        copyFile(musicFile, newDir, "music.mid");
+
+        tempZip.delete();
+        artwork.delete();
+        notesFile.delete();
+        musicFile.delete();
+        
+    }
+
+    private void DownloadZip(int PackageID){
+        //Setup IO Streams
+        try{
+           
+            Socket serverSocket = new Socket(hostName, portNumber);
+            PrintWriter out = new PrintWriter(serverSocket.getOutputStream(), true);        
+            InputStream is = serverSocket.getInputStream();
+            DataInputStream dis = new DataInputStream(is);
+
+            //Request Package from server
+            out.println(PackageID);
+
+            //Write the downloaded data stream to a zip file.
+            FileOutputStream fos = new FileOutputStream("Temp.zip");
+                
+            byte[] buffer = new byte[4096];
+            int length;
+            while((length = dis.read(buffer)) >= 0) {
+                fos.write(buffer, 0, length);
+            }
+        
+            fos.close();
+            dis.close();
+            serverSocket.close();
+
+        } catch (UnknownHostException e) {
+            System.err.println("Can't find host: " + hostName);
+            System.exit(0);
+        } catch (IOException e) {
+            System.err.println("Couldn't get I/O");
+            System.exit(0);
+        }
+
+
+        if(PackageID == 0){
+            File Artwork = new File("Artwork");
+            if(Artwork.exists()){
+                for(File image: Artwork.listFiles()){
+                    image.delete();
+                }
+                Artwork.delete();
+            }
+            File availableSongs = new File("Available.txt");
+            if(availableSongs.exists()){availableSongs.delete();}
+
+            //Unzip the folder now
+        }else{
+            //Put the package in the package place.
+        }
+    }
+
+    private void Unzip(){
+        try {
+			ZipFile zipFile = new ZipFile("Temp.zip");
+			Enumeration<?> enu = zipFile.entries();
+			while (enu.hasMoreElements()) {
+				ZipEntry zipEntry = (ZipEntry) enu.nextElement();
+
+				String name = zipEntry.getName();
+				long size = zipEntry.getSize();
+				long compressedSize = zipEntry.getCompressedSize();
+				System.out.printf("name: %-20s | size: %6d | compressed size: %6d\n", 
+						name, size, compressedSize);
+
+				File file = new File(name);
+				if (name.endsWith("/")) {
+					file.mkdirs();
+					continue;
+				}
+
+				File parent = file.getParentFile();
+				if (parent != null) {
+					parent.mkdirs();
+				}
+
+				InputStream is = zipFile.getInputStream(zipEntry);
+				FileOutputStream fos = new FileOutputStream(file);
+				byte[] bytes = new byte[1024];
+				int length;
+				while ((length = is.read(bytes)) >= 0) {
+					fos.write(bytes, 0, length);
+				}
+				is.close();
+				fos.close();
+
+			}
+			zipFile.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+    }
+
+    /**
+     * copyFile takes a file, desired destination, and new file name, copies the file with the new name, then returns the new file.
+     * @author Paul Wynne
+     * 
+     * @param sourceFile The source file to be copied
+     * @param destinationDirectory The directory to be copied into
+     * @param newFileName The name of the new copy of the file
+     * 
+     * @return The new copy of the file
+     * 
+     */
+    private File copyFile(File sourceFile, File destinationDirectory, String newFileName){
+        try{
+            Files.copy(sourceFile.toPath(), (new File(destinationDirectory.getAbsolutePath()+ "/" + newFileName)).toPath(), StandardCopyOption.REPLACE_EXISTING);
+        }catch(IOException e){
+            System.err.println("File Copy Error");
+            System.exit(0);
+        }
+        
+        return (new File(destinationDirectory.getAbsolutePath()+ "/" + newFileName));
+
+    }
+
+}
